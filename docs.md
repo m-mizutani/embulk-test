@@ -60,14 +60,12 @@ Bundled gems are installed into ..
 ```
 
 
-次いで、Elasticsearchプラグインをインストールする
+次いで、Elasticsearchプラグインをインストールする。Elasticsearchはbundle環境内にインストールしなければいけないので、Gemfileに書き込む。
 
 ```shell
-% ./embulk gem -b nazo_log install embulk-output-elasticsearch
-2015-03-15 14:51:16.839 +0900: Embulk v0.5.2
-Fetching: embulk-output-elasticsearch-0.1.3.gem (100%)
-Successfully installed embulk-output-elasticsearch-0.1.3
-1 gem installed
+% cd nazo_log
+% echo "gem 'embulk-output-elasticsearch'" >> Gemfile
+% bundle install
 ```
 
 
@@ -220,6 +218,11 @@ curlを使って結果確認
 {"took":18,"timed_out":false,"_shards":{"total":5,"successful":5,"failed":0},"hits":{"total":100,"max_score":1.0,"hits":[{"_index":"test","_type":"nazo","_id":"AUwcX-_hL2rF_XRla2ix","_score":1.0,"_source":{"datetime":"2015-11-26T23:01:47.000Z","host":"lutz","user":"10.1.2.3"}},{"_index":"test","_type":"nazo","_id":"AUwcX-_kL2rF_XRla2jp","_score":1.0,"_source":{"datetime":"2015-11-26T21:59:02.000Z","host":"harald","user":"10.1.2.3"}},{"_index":"test","_type":"nazo","_id":"AUwcX-_iL2rF_XRla2jA","_score":1.0,"_source":{"datetime":"2015-11-26T23:23:08.000Z","host":"oskar","user":"10.1.2.3"}},{"_index":"test","_type":"nazo","_id":"AUwcX-_kL2rF_XRla2jz","_score":1.0,"_source":{"datetime":"2015-11-26T22:13:16.000Z","host":"hendrik","user":"10.1.2.3"}},{"_index":"test","_type":"nazo","_id":"AUwcX-_jL2rF_XRla2jh","_score":1.0,"_source":{...
 ```
 
+
+備考
+-----------
+
+関連ファイルは[github](https://github.com/m-mizutani/embulk-test)に置きました。
 
 参考文献
 -----------
