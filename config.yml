@@ -1,0 +1,12 @@
+exec: {}
+in:
+  type: file
+  path_prefix: ./logs/
+  parser: 
+    type: nazo_log
+out:
+  type: elasticsearch
+  nodes:
+  - {host: localhost, port: 9300}
+  index: test
+  index_type: nazo
