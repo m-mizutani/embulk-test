@@ -4,7 +4,7 @@ require 'time'
 module Embulk
   module Parser
     class NazoLogParser < ParserPlugin
-      Plugin.register_parser("nazo_log", self)
+      Plugin.register_parser("nazolog", self)
 
       def self.transaction(config, &control)
         # 一度のコマンド実行で一度だけ呼び出される

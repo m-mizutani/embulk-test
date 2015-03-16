@@ -1,6 +1,8 @@
 Embulkを使って大量の謎ログを読み込ませる手順
 ======================
 
+2015.3.16: @hiroysatoさんから教えていただいたnewコマンドをベースにした方法へ大幅に書き換え。
+
 背景
 ----------
 
@@ -28,21 +30,18 @@ embulkのインストール
 
 URLに含まれるバージョン番号はリリースとともに変更されるようなので[github上のリリース一覧](https://github.com/embulk/embulk/releases)で確認すると良さそう。
 
-
-
-プラグインディレクトリの作成
------------
+次いで、Elasticsearchプラグインをインストールする。デフォルトだと`~/.embulk`にパッケージが入るようなので、環境を汚さないように`test_bundle`というbundle環境を作る。
 
 ```shell
-% ./embulk bundle nazo_log
-2015-03-15 13:45:55.032 +0900: Embulk v0.5.2
-Initializing nazo_log...
-  Creating nazo_log/.bundle/config
-  Creating nazo_log/embulk/input/example.rb
-  Creating nazo_log/embulk/output/example.rb
-  Creating nazo_log/embulk/filter/example.rb
-  Creating nazo_log/Gemfile
-  Fetching: bundler-1.8.5.gem (100%)^P^P^P^P^P^PFetching: bundler-1.8.5.gem
+% ./embulk -J-Xmx1000m bundle test_bundle
+2015-03-16 22:01:14.335 +0900: Embulk v0.5.2
+Initializing test_bundle...
+  Creating test_bundle/.bundle/config
+  Creating test_bundle/embulk/input/example.rb
+  Creating test_bundle/embulk/output/example.rb
+  Creating test_bundle/embulk/filter/example.rb
+  Creating test_bundle/Gemfile
+  Fetching: bundler-1.8.5.gem (100%)
 Successfully installed bundler-1.8.5
 1 gem installed
 The Gemfile specifies no dependencies
@@ -50,29 +49,49 @@ Resolving dependencies...
 Bundle complete! 0 Gemfile dependencies, 1 gem now installed.
 Bundled gems are installed into ..
 ```
-  
-  ファイルから読み込む場合inputプラグインでも作れるのだが、ファイル読み込みの並列化などは[既存のFile inputを使ってParserプラグインとするのが良い](https://gist.github.com/frsyuki/dcfb30690fd453542f45)らしいので、Parserプラグインとして実装する。bundleコマンドを使うとparserディレクトリが作成されないので
-  、別途作成する。
+
+プラグインをインストールする。
 
 ```shell
-% mkdir nazo_log/embulk/parser
-% touch nazo_log/embulk/parser/nazo_log.rb
-```
-
-
-次いで、Elasticsearchプラグインをインストールする。Elasticsearchはbundle環境内にインストールしなければいけないので、Gemfileに書き込む。
-
-```shell
-% cd nazo_log
+% cd test_bundle
 % echo "gem 'embulk-output-elasticsearch'" >> Gemfile
 % bundle install
+Fetching gem metadata from https://rubygems.org/..
+Resolving dependencies...
+Installing embulk-output-elasticsearch 0.1.3
+Using bundler 1.7.12
+Your bundle is complete!
+It was installed into .
 ```
+
+インストールされたかどうかの確認。
+
+
+
+プラグインディレクトリの作成
+-----------
+
+```shell
+% ./embulk new ruby-parser nazolog
+2015-03-16 21:37:25.794 +0900: Embulk v0.5.2
+Creating embulk-parser-nazolog/
+  Creating embulk-parser-nazolog/README.md
+  Creating embulk-parser-nazolog/LICENSE.txt
+  Creating embulk-parser-nazolog/.gitignore
+  Creating embulk-parser-nazolog/Rakefile
+  Creating embulk-parser-nazolog/Gemfile
+  Creating embulk-parser-nazolog/embulk-parser-nazolog.gemspec
+  Creating embulk-parser-nazolog/lib/embulk/parser/nazolog.rb
+  Creating embulk-parser-nazolog/lib/embulk/guess/nazolog.rb
+```
+  
+ファイルから読み込む場合inputプラグインでも作れるのだが、ファイル読み込みの並列化などは[既存のFile inputを使ってParserプラグインとするのが良い](https://gist.github.com/frsyuki/dcfb30690fd453542f45)らしいので、Parserプラグインとして実装する。newコマンドを使って`ruby-parser`を指定すると、jrubyで動かすparserのひな形が作成される。
 
 
 プラグインを書く
 -----------
 
-`nazo_log/embulk/parser/nazo_log.rb` を編集する
+`embulk-parser-nazolog/lib/embulk/parser/nazolog.rb` を編集する
 
 ```ruby
 # coding: utf-8
@@ -81,7 +100,7 @@ require 'time'
 module Embulk
   module Parser
     class NazoLogParser < ParserPlugin
-      Plugin.register_parser("nazo_log", self)
+      Plugin.register_parser("nazolog", self)
 
       def self.transaction(config, &control)
         # 一度のコマンド実行で一度だけ呼び出される
@@ -129,7 +148,7 @@ end
 読み込みを確認する
 -----------
 
-仮で `temp.yml` に以下のような設定をする
+設定ファイル `config.yml` に以下のような設定をする
 
 ```yaml
 exec: {}
@@ -137,15 +156,19 @@ in:
   type: file
   path_prefix: ./logs/
   parser: 
-    type: nazo_log
-out: {type: example}
-
+    type: nazolog
+out:
+  type: elasticsearch
+  node:
+  - {host: localhost, port: 9300}
+  index: test
+  index_type: nazo
 ```
 
 実行してみる。
 
 ```
-% ./embulk preview -b nazo_log temp.yml
+% ./embulk preview -b test_bundle -I embulk-parser-nazolog/lib config.yml
 2015-03-15 13:51:13.339 +0900: Embulk v0.5.2
 2015-03-15 13:51:14.225 +0900 [INFO] (preview): Listing local files at directory 'logs' filtering filename by prefix ''
 2015-03-15 13:51:14.229 +0900 [INFO] (preview): Loading files [logs/sample-1.log, logs/sample-2.log]
@@ -171,30 +194,13 @@ out: {type: example}
 ...
 ```
 
-Elasticsearchへの出力を設定して実行
+実際にElasticsearchにデータを入れる
 -----------
-
-`config.yml`を以下のように修正
-
-```yaml
-exec: {}
-in:
-  type: file
-  path_prefix: ./logs/
-  parser: 
-    type: nazo_log
-out:
-  type: elasticsearch
-  node:
-  - {host: localhost, port: 9300}
-  index: test
-  index_type: nazo
-```
 
 `run`コマンドによりデータを実際に入力〜出力まで通す。
 
 ```shell
-% ./embulk run -b nazo_log config.yml
+% ./embulk run -b test_bundle -I embulk-parser-nazolog/lib config.yml
 2015-03-15 16:38:39.443 +0900: Embulk v0.5.2
 2015-03-15 16:38:40.917 +0900 [INFO] (transaction): Listing local files at directory 'logs' filtering filename by prefix ''
 2015-03-15 16:38:40.921 +0900 [INFO] (transaction): Loading files [logs/sample-2.log, logs/sample-1.log]
@@ -222,7 +228,48 @@ curlを使って結果確認
 備考
 -----------
 
-関連ファイルは[github](https://github.com/m-mizutani/embulk-test)に置きました。
+### 関連ファイル
+
+[github](https://github.com/m-mizutani/embulk-test)に置きました。
+
+### メモリ問題
+
+環境によってはjrubyのデフォルトメモリ制限？に引っかかるらしく、bundleやgem installなどのコマンド実行中に以下のようなエラーで落ちる。
+
+```shell
+% ./embulk bundle hoge
+2015-03-16 22:12:56.803 +0900: Embulk v0.5.2
+Initializing hoge...
+Creating hoge/.bundle/config
+Creating hoge/embulk/input/example.rb
+Creating hoge/embulk/output/example.rb
+Creating hoge/embulk/filter/example.rb
+Creating hoge/Gemfile
+Error: Your application used more memory than the default safety cap.
+Specify -J-Xmx####m to increase it (#### = cap size in MB).
+Specify -w for full OutOfMemoryError stack trace
+```
+
+`-J-Xmx1000m` のようにオプション指定して実行することで回避できる。
+
+```shell
+% ./embulk -J-Xmx1000m bundle hoge
+2015-03-16 22:15:14.988 +0900: Embulk v0.5.2
+Initializing hoge...
+Creating hoge/.bundle/config
+  Creating hoge/embulk/input/example.rb
+  Creating hoge/embulk/output/example.rb
+  Creating hoge/embulk/filter/example.rb
+  Creating hoge/Gemfile
+Fetching: bundler-1.8.5.gem (100%)
+Successfully installed bundler-1.8.5
+1 gem installed
+The Gemfile specifies no dependencies
+Resolving dependencies...
+Bundle complete! 0 Gemfile dependencies, 1 gem now installed.
+Bundled gems are installed into ..
+```
+
 
 参考文献
 -----------
